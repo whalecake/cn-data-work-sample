@@ -302,6 +302,54 @@ gender_class <- ggplot (subset(studata, AUDIT!="AUDIT" & Class_Level=="Advanced"
 gender_class
 ```
 
+### Visualization: ADV Gender x Race/Ethnicity
+
+The last breakdown I want to analyze is along gender AND race/ethnicity in ADV classes in the 2018-2019 school year, particularly for Black/African American and Latinx/Hispanic students. Black/African American and female students in ADV classes exhibit lower attendance rates than the overall averages, so there is room for further analyses along these cross-sections.
+
+From this breakdown, we can see that, though the average attendance rate for all ADV classes is 74%...
+
+* Female students, regardless of race/ethnicity, exhibit lower attendance rates than average, while males exhibit higher.
+* The 38 Black/African American female students in ADV classes have a 63.1% attendance rate on average.
+* The 47 Hispanic/Latinx and 26 remaining students exhibit 72.7% and 72.8% average attendance rates, respectively.
+
+**It is likely that a student being a Black/African American female AND a female in general, regardless of race/ethnicity, is associated with lower attendance rates overall in ADV classes.**
+
+```{r echo=FALSE}
+
+# Data Summary
+
+gender_raceeth_adv <- studata %>%
+        filter(AUDIT!="AUDIT", Class_Level=="Advanced", Gender!="Neither") %>%
+        group_by(Gender, Black_Latinx_NEW) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate)) 
+
+gender_raceeth_adv 
+
+# Visualization
+
+gender_raceeth_adv_v <- ggplot (subset(studata, AUDIT!="AUDIT" & Class_Level=="Advanced" & Gender !="Neither"), aes(x = Attendance_Rate, color=Black_Latinx_NEW)) +
+        geom_density() +
+        facet_grid(~Gender) +
+        geom_vline(data=gender_raceeth_adv, mapping = aes(xintercept=meanAtt, color=Black_Latinx_NEW), linetype="dashed") +
+        scale_color_manual(values=c("#17D3FF", "#E4A4EE","grey"), labels=c("Black or African American", "Latinx or Hispanic", "Neither")) +
+        labs(title="Attendance Rate Distribution for Students By Race/Ethnicity and Gender in ADV Classes",
+             x="Attendance Rate", y="Probability Density", color="Student Race/Ethnicity") +
+        geom_vline(mapping = aes(xintercept=0.74), color="#0080FF", linetype="solid") +
+        geom_vline(mapping = aes(xintercept=0.814), color="#FFAA7B", linetype="solid") +
+        annotate("text", x=0.83, y=0.88, label="average 2018-2019 attendance rate = 81.4%", angle=90, size=2.2, color="#FFAA7B") +
+        theme(plot.title = element_text(size=11, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 11, color="#0080FF"), axis.title.y = element_text(size = 11, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=0.72, y=0.88, label="average ADV attendance rate = 74.0%", angle=90, size=2.2, color="#0080FF")
+
+gender_raceeth_adv_v
+
+```
+
+
+
 ## Completion Data Summaries {.tabset}
 
 **On average, of the 1,443, non-audited students, 23% of students were dropped at the end of the 2018-2019 school year.**
@@ -363,6 +411,8 @@ studata %>%
 ## Completion Data Visualizations {.tabset}
 
 The following data visualizations show dropped/completed probabilities side-by-side along race/ethnicity and gender groupings. The blue line representes the average drop rate across ALL students in the 2018-2019 school year.
+
+**Further analyses:** Given more capacity, I would, similar to the attendance analysis, break this down by Class Level, as well as the cross-sections of variables - I'm particularly interested in analyze Black/African American female completion/drop rates.
 
 ### By Race/Ethnicity
 
@@ -426,6 +476,7 @@ gender_comp <- ggplot (subset(studata, AUDIT!="AUDIT"), aes(x = Gender, fill=Sta
 gender_comp
 ```
 
+
 ## Dropped Reasons Data Summaries {.tabset}
 
 From a programmatic standpoint, my interest is in the values of "Low Dosage" and "No Interest", because those are often the metrics that reflect a student's comfortability with and interest in Code Nation programming. That being said, these are the metrics that we have the most ability to affect. However, students who are dropped due to Out of Control Conflicts are also of interest, because it seems like solutions to this expand out of the scope of day-to-day programming.
@@ -474,12 +525,14 @@ The students who were dropped due to conflicts out of the students' controls wer
 
 
 ```{r echo=FALSE}
-studata %>%
+df_raceeth_dropreason <- studata %>%
         filter(Status=="Dropped", AUDIT!="AUDIT") %>%
         group_by(Black_Latinx_NEW, Drop_Out_Reason_NEW) %>%
         summarise(count = n()) %>%
         group_by(Black_Latinx_NEW) %>%
         mutate(prop=percent(count/sum(count)))
+
+df_raceeth_dropreason
 ```
 
 ### By Gender
@@ -518,14 +571,23 @@ studata %>%
 
 ## Dropped Reasons Data Visualizations {.tabset}
 
-The percentages above are reflected in the data visualizations below.
+The percentages above are reflected in the data visualizations below, where the orange diamonds represent the average percentage % of the given dropped reason, among ALL students who were dropped.
 
 ### By Race/Ethnicity
 ```{r echo=FALSE}
+
+# Create points overlay
+dropreason_overall_pts <- studata %>%
+        filter(AUDIT!="AUDIT", Status=="Dropped") %>%
+        group_by(Drop_Out_Reason_NEW) %>%
+        summarise(count = n()) %>%
+        mutate(prop=count/sum(count))
+
 dropreason_raceeth <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped"), aes(x=Drop_Out_Reason_NEW, group=Black_Latinx_NEW)) +
         geom_bar(aes(y=..prop..)) +
         facet_grid(~Black_Latinx_NEW) +
         scale_y_continuous(labels = scales::percent) +
+        geom_point(data=dropreason_overall_pts, aes(x=Drop_Out_Reason_NEW, y=prop), shape=9, size=2.8, color="#FFAA7B", inherit.aes=FALSE) +
         labs(title="Drop Out Reason, Broken down by Race/Ethnicity",
              x="Drop Out Reason", y="% Percent of Provided Drop Out Reason") +
         theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
@@ -534,7 +596,11 @@ dropreason_raceeth <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped"
               panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
               panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey"),
               axis.text.x = element_text(angle=60, size=9, hjust=1),
-              strip.background = element_blank())
+              strip.background = element_blank()) +
+        annotate("text", x=1, y=.25, label="avg = 22.9%", size=1.8, color="#0080FF") +
+        annotate("text", x=2, y=.24, label="avg = 22.0%", size=1.8, color="#0080FF") +
+        annotate("text", x=3, y=.25, label="avg = 22.6%", size=1.8, color="#0080FF") +
+        annotate("text", x=4, y=.35, label="avg = 32.6%", size=1.8, color="#0080FF")
 
 dropreason_raceeth
 ```
@@ -546,6 +612,7 @@ dropreason_gender <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped" 
         geom_bar(aes(y=..prop..)) +
         facet_grid(~Gender) +
         scale_y_continuous(labels = scales::percent) +
+        geom_point(data=dropreason_overall_pts, aes(x=Drop_Out_Reason_NEW, y=prop), shape=9, size=2.8, color="#FFAA7B", inherit.aes=FALSE) +
         labs(title="Drop Out Reason, Broken down by Gender",
              x="Drop Out Reason", y="% Percent of Provided Drop Out Reason") +
         theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
@@ -554,7 +621,11 @@ dropreason_gender <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped" 
               panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
               panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey"),
               axis.text.x = element_text(angle=60, size=9, hjust=1),
-              strip.background = element_blank())
+              strip.background = element_blank()) +
+        annotate("text", x=1, y=.25, label="avg = 22.9%", size=1.8, color="#0080FF") +
+        annotate("text", x=2, y=.24, label="avg = 22.0%", size=1.8, color="#0080FF") +
+        annotate("text", x=3, y=.25, label="avg = 22.6%", size=1.8, color="#0080FF") +
+        annotate("text", x=4, y=.35, label="avg = 32.6%", size=1.8, color="#0080FF")
 
 dropreason_gender
 ```
