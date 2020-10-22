@@ -1,0 +1,625 @@
+---
+title: "Ingrid - CN Data Manager Work Sample"
+author: "Ingrid Ang"
+date: "October 21, 2020"
+output:
+        html_document:
+                toc: true
+                toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(scales)
+```
+
+```{r include=FALSE}
+studata <- read_xlsx("/Users/ingrid/Desktop/Data Role Work Sample/Ingrid - Data Role Work Sample - Students - RAW.xlsx")
+names(studata) <- gsub(" ","_",names(studata))
+names(studata) <- gsub("/","_",names(studata))
+studata$Drop_Out_Reason[studata$Drop_Out_Reason=="S- Low Dosage"] <- "S - Low Dosage"
+
+studata <- studata %>%
+        mutate (Black_Latinx_NEW = 
+                ifelse(Race_Ethnicity=="Black or African American", "Black or African American",
+                ifelse(Race_Ethnicity=="Hispanic or Latino", "Hispanic or Latinx",
+                "Neither")))
+
+studata <- studata %>%
+        mutate (Drop_Out_Reason_NEW = 
+                ifelse(Drop_Out_Reason=="S - Low Dosage", "Low Dosage",
+                ifelse(Drop_Out_Reason=="S - Moved/Changed Schools" | Drop_Out_Reason=="S - Out of Control Conflict" , "Out of Control Conflict",
+                       ifelse(Drop_Out_Reason=="S - No Longer Interested", "No Interest",
+                "Unknown"))))
+```
+
+## Data Clean-Up
+
+**In total, 1,443 out of the original 1,475 students in the data set are included in these summaries & visualizations.**
+
+1. Students sharing Contact IDs with other students were marked as Audited
+2. Students with missing attendance, status, gender, and race/ethnicity data were marked as Audited
+3. Students with "V - ..." values for Drop Reasons were marked as Audited.
+
+**Variables were manipulated to allow for cleaner data analysis along race/ethnicity lines, as well as Drop Reasons.**
+
+1. **Minor value clean-up:** All "S- Low Dosage" values for Drop_Reasons were converted to "S - Low Dosage"
+2. **A new column, Black_Latinx_NEW,** was created to combine data found in Race_Ethnicity AND Black_Latinx. Therefore, any student who was neither Black nor Latinx would be considered "Neither". Because Code Nation aims to provide access and opportunity to students who have historically & systemically been underrepresented in the tech industry, I chose to focus only on comparing Black/African American and Latinx/Hispanic student outcomes with outcomes of students who identify as neither race/ethnicity.
+3. **A new column, Drop_Out_Reason_NEW,** was created to combine the "Moved/Changed Schools" value with the "Out of Control Conflict" value.
+
+## Research Questions
+
+**Attendance: Exploratory Data Analysis**
+
+1. Does a student's self-identified race/ethnicity have any association with their attendance rate of Code Nation programs?
+2. Does a student's self-identified gender have any association with their attendance rate of Code Nation programs?
+
+**Program Completion: Exploratory Data Analysis**
+
+1. Does a student's self-identified race/ethnicity affect their likelihood of completing a Code Nation program?
+2. Does a student's self-identified gender affect their likelihood of completing a Code Nation program?
+
+**Dropped Reasons: Exploratory Data Analysis**
+
+1. Does a dropped student's self-identified race/ethnicity have any association with their reason for being dropped from Code Nation programming?
+2. Does a dropped student's self-identified gender have any association with their reason for being dropped from Code Nation programming?
+
+Note that any patterns seen in the data suggest likely associations, but **causation cannot be determined without further hypothesis testing and statistical analysis**. From a programmatic standpoint, I want to focus on the questions and next steps that the observed data may bring up.
+
+I've also included a sample statistical inference (a chi-square test for independence) in this work sample.
+
+## Attendance Data Summaries {.tabset}
+
+**The average attendance rate of all 1,443, non-audited students is 81.4% in the 2018-2019 school year.**
+
+### Overall
+
+```{r echo=FALSE}
+studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        summarise(meanAtt=mean(Attendance_Rate))
+```
+
+### By Race/Ethnicity
+
+* The average attendance rate of all 411 students identifying as Black/African American is 80.1%. 
+* The average attendance rate of all 684 students identifying as Hispanic/Latinx is 81.6%.
+* The average attendance rate of all 348 students identifying as neither is 82.7%.
+
+There is a likelihood that a student's attendance rate is slightly associated with their self-identified race/ethnicity, with Black/African American students exhibiting slightly lower attendance rates than the overall average.
+
+```{r echo=FALSE}
+raceeth_summary <- studata %>%
+        group_by(Race_Ethnicity) %>%
+        filter((Race_Ethnicity=="Black or African American" | Race_Ethnicity=="Hispanic or Latino") & AUDIT!="AUDIT") %>%
+        summarise(count=n(), meanAtt=mean(Attendance_Rate))
+
+# Group data by whether or not students are Black/African American or Latinx/Hispanic
+
+raceethgen_summary <- studata %>%
+        group_by(Black_Latinx) %>%
+        filter(Black_Latinx=="No" & AUDIT!="AUDIT") %>%
+        summarise(count=n(), meanAtt=mean(Attendance_Rate))
+
+raceeth_summary
+raceethgen_summary
+```
+
+### By Gender
+
+* The average attendance rate of all 643 students identifying as female is 80.2%. 
+* The average attendance rate of all 791 students identifying as male is 82.4%.
+* The average attendance rate of 9 students identifying as neither female nor male is 86.1%.
+
+There is a likelihood that a student's attendance rate is slightly associated with their self-identified gender, with female students exhibiting slightly lower attendance rates than the overall average.
+
+```{r echo=FALSE}
+att_gender_summary <- studata %>%
+        group_by(Gender) %>%
+        filter(AUDIT!="AUDIT") %>%
+        summarise(count=n(), meanAtt=mean(Attendance_Rate))
+
+att_gender_summary
+```
+
+
+## Attendance Data Visualizations {.tabset}
+
+The following data visualizations show the probability density of attendance rates of students by both Race/Ethnicity and Gender. Exact probabilities of occurence of a specific attendance rate require that we calculate the area underneath the probability density curve. The probability density curve is useful for relative comparisons of occurences of certain values, in this case attendance rates.
+
+### By Race/Ethnicity
+
+There is a likelihood that a student's attendance rate is slightly associated with their self-identified race/ethnicity, with Black/African American students exhibiting slightly lower attendance rates than the overall average.
+
+* The blue line represents the average attendance rate of all students, while the dotted lines represent the average attendance rates of students falling within each race/ethnicity group.
+
+```{r echo=FALSE}
+raceeth <- ggplot (subset(studata, Black_Latinx=="Yes" & AUDIT!="AUDIT"), aes(x = Attendance_Rate, color=Race_Ethnicity)) +
+        geom_density() +
+        geom_vline(data=raceeth_summary, mapping = aes(xintercept=meanAtt, color=Race_Ethnicity), linetype="dashed") +
+        scale_color_manual(values=c("#17D3FF", "#E4A4EE","grey"), labels=c("Black or African American", "Latinx or Hispanic", "Neither")) +
+        labs(title="Attendance Rate Distribution for Students By Race/Ethnicity",
+             x="Attendance Rate", y="Probability Density", color="Student Race/Ethnicity") +
+        geom_density (subset(studata, Black_Latinx=="No" & AUDIT!="AUDIT"), mapping = aes(x = Attendance_Rate, color = Black_Latinx)) +
+        geom_vline(data=raceethgen_summary, mapping = aes(xintercept=meanAtt, color=Black_Latinx), linetype="dashed") +
+        geom_vline(mapping = aes(xintercept=mean(Attendance_Rate)), color="#0080FF", linetype="solid") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=0.8, y=0.88, label="average attendance rate = 81.4%", angle=90, size=3, color="#0080FF")
+
+raceeth
+```
+
+### By Gender
+
+There is a likelihood that a student's attendance rate is slightly associated with their self-identified gender, with female students exhibiting slightly lower attendance rates than the overall average. 
+
+* The blue line represents the average attendance rate of all students, while the dotted lines represent the average attendance rates of students falling within each race/ethnicity group.
+
+```{r echo=FALSE}
+
+# Create a density graph based on gender breakdowns
+att_gender <- ggplot (subset(studata, AUDIT!="AUDIT"), aes(x = Attendance_Rate, color=Gender)) +
+        geom_density() +
+        geom_vline(data=att_gender_summary, mapping = aes(xintercept=meanAtt, color=Gender), linetype="dashed") +
+        scale_color_manual(values=c("#17D3FF", "#E4A4EE","grey"), labels=c("Female", "Male", "Other")) +
+        labs(title="Attendance Rate Distribution for Students By Gender",
+             x="Attendance Rate", y="Probability Density", color="Student Gender") +
+        geom_vline(mapping = aes(xintercept=mean(Attendance_Rate)), color="#0080FF", linetype="solid") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=0.8, y=0.88, label="average attendance rate = 81.4%", angle=90, size=3, color="#0080FF")
+
+att_gender
+```
+
+## Attendance: Further Analyses {.tabset}
+
+Because there are no clear associations between attendance rates and both Race/Etnicity and Gender data from the exploratory analysis, I would break down my analyses further by class level. Anecdotally, students who are in Advanced or Studio classes often exhibit higher attendance rates due to higher levels of commitment to the organization.
+
+**The average attendance rate of all 1,443, non-audited students is 81.4% in the 2018-2019 school year.**
+
+* In Foundations classes, the average attendance rate of all 1,174 students is 82.8%.
+* In Advanced classes, the average attendance rate of all 230 students is 74.0%.
+* In Studio classes, the average attendance rate of all 39 students is 83.4%.
+
+There is a likelihood that a student's attendance rate is heavily associated with their class level, with Advanced students exhibiting much lower attendance rates than the overall average. Observing this, I will break down the data analyses further by students' race/ethnicity, with particular interest in the Advanced classes.
+
+### Summaries: All Class Levels
+
+It is interesting to note here that, across all genders & races/ethnicities, students in Advanced classes have a lower average attendance rate.
+
+```{r echo=FALSE}
+
+# Overall class level attendance data
+studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Class_Level) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate))
+
+# Class level AND race/ethnicity data
+raceeth_class_summ <- studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Black_Latinx_NEW, Class_Level) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate))
+
+raceeth_class_summ
+
+# Class level AND gender data
+gender_class_summ <- studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Gender, Class_Level) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate))
+
+gender_class_summ
+```
+
+
+### Visualization: ADV x Race/Ethnicity
+
+Given the data summary & visualization, there is a likelihood that a student's **attendance rate for their Advanced Class** is associated with their self-identified race/ethnicity, with Black/African American students exhibiting lower attendance rates than the overall average in ADV classes.
+
+* While the average ADV attendance rate is 74%, Black/African-American students exhibited a 68.5% attendance rate, which is considerably lower than average.
+* The blue line represents the average attendance rate of all students, while the dotted lines represent the average attendance rates of students falling within each race/ethnicity group.
+
+```{r echo=FALSE}
+
+# Data Summary
+
+raceeth_adv <- studata %>%
+        filter(AUDIT!="AUDIT", Class_Level=="Advanced") %>%
+        group_by(Black_Latinx_NEW) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate)) 
+
+raceeth_adv
+
+# Visualization
+
+raceeth_class <- ggplot (subset(studata, AUDIT!="AUDIT" & Class_Level=="Advanced"), aes(x = Attendance_Rate, color=Black_Latinx_NEW)) +
+        geom_density() +
+        geom_vline(data=raceeth_adv, mapping = aes(xintercept=meanAtt, color=Black_Latinx_NEW), linetype="dashed") +
+        scale_color_manual(values=c("#17D3FF", "#E4A4EE","grey"), labels=c("Black or African American", "Latinx or Hispanic", "Neither")) +
+        labs(title="Attendance Rate Distribution for Students By Race/Ethnicity in ADV Classes",
+             x="Attendance Rate", y="Probability Density", color="Student Race/Ethnicity") +
+        geom_vline(mapping = aes(xintercept=0.74), color="#0080FF", linetype="solid") +
+        geom_vline(mapping = aes(xintercept=0.814), color="#FFAA7B", linetype="solid") +
+        annotate("text", x=0.83, y=0.88, label="average 2018-2019 attendance rate = 81.4%", angle=90, size=3, color="#FFAA7B") +
+        theme(plot.title = element_text(size=12, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=0.72, y=0.88, label="average ADV attendance rate = 74.0%", angle=90, size=3, color="#0080FF")
+
+raceeth_class
+```
+
+### Visualization: ADV x Gender
+
+Given the data summary & visualization, there is a likelihood that a student's **attendance rate for their Advanced Class** is associated with their self-identified gender, with female students exhibiting lower attendance rates than the overall average in ADV classes.
+
+* While the average ADV attendance rate is 74%, female students exhibited a 69.4% attendance rate, which is considerably lower than average.
+* The blue line represents the average attendance rate of all students, while the dotted lines represent the average attendance rates of students falling within each gender group.
+
+```{r echo=FALSE}
+
+# Data Summary
+
+gender_adv <- studata %>%
+        filter(AUDIT!="AUDIT", Class_Level=="Advanced") %>%
+        group_by(Gender) %>%
+        summarise(count = n(), meanAtt=mean(Attendance_Rate)) 
+
+gender_adv
+
+# Visualization
+
+gender_class <- ggplot (subset(studata, AUDIT!="AUDIT" & Class_Level=="Advanced"), aes(x = Attendance_Rate, color=Gender)) +
+        geom_density() +
+        geom_vline(data=gender_adv, mapping = aes(xintercept=meanAtt, color=Gender), linetype="dashed") +
+        scale_color_manual(values=c("#17D3FF", "#E4A4EE","grey"), labels=c("Female", "Male", "Other")) +
+        labs(title="Attendance Rate Distribution for Students By Gender in ADV Classes",
+             x="Attendance Rate", y="Probability Density", color="Student Race/Ethnicity") +
+        geom_vline(mapping = aes(xintercept=0.74), color="#0080FF", linetype="solid") +
+        annotate("text", x=0.72, y=0.88, label="average ADV attendance rate = 74.0%", angle=90, size=3, color="#0080FF") +
+        geom_vline(mapping = aes(xintercept=0.814), color="#FFAA7B", linetype="solid") +
+        annotate("text", x=0.83, y=0.83, label="average 2018-2019 attendance rate = 81.4%", angle=90, size=3, color="#FFAA7B") +
+        theme(plot.title = element_text(size=12, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey"))
+
+gender_class
+```
+
+## Completion Data Summaries {.tabset}
+
+**On average, of the 1,443, non-audited students, 23% of students were dropped at the end of the 2018-2019 school year.**
+
+### Overall
+```{r echo=FALSE}
+# Summary data for all Completion
+
+complavg <- studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Status) %>%
+        summarise(count = n()) %>%
+        mutate(prop=percent(count/sum(count)))
+
+complavg
+```
+
+### By Race/Ethnicity
+
+At the end of the 2018-2019 school year...
+
+* 27.7% of our Black/African American students (114 out of 411) were dropped.
+* 20.5% of our Latinx/Hispanic students (140 out of 684) were dropped.
+* 23.9% of students identifying as neither were dropped.
+
+There is a likelihood that a student's race/ethnicity affects their probability of completing a Code Nation program, with Black/African American students exhibiting higher drop rates than the overall average.
+
+```{r echo=FALSE}
+# Data grouped by Race/Ethnicity
+studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Black_Latinx_NEW, Status) %>%
+        summarise(count = n()) %>%
+        group_by(Black_Latinx_NEW) %>%
+        mutate(prop=percent(count/sum(count)))
+```
+
+### By Gender
+
+At the end of the 2018-2019 school year...
+
+* 25.8% of our female students (114 out of 643) were dropped.
+* 21.5% of our male students (170 out of 791) were dropped.
+* 11.1% of students (1 out of 9) identifying as neither were dropped.
+
+There is a likelihood that a student's gender affects their probability of completing a Code Nation program, with female students exhibiting higher drop rates than the overall average.
+
+```{r echo=FALSE}
+# Data grouped by Gender
+studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Gender, Status) %>%
+        summarise(count = n()) %>%
+        group_by(Gender) %>%
+        mutate(prop=percent(count/sum(count)))
+```
+
+
+## Completion Data Visualizations {.tabset}
+
+The following data visualizations show dropped/completed probabilities side-by-side along race/ethnicity and gender groupings. The blue line representes the average drop rate across ALL students in the 2018-2019 school year.
+
+### By Race/Ethnicity
+
+At the end of the 2018-2019 school year...
+
+* 27.7% of our Black/African American students (114 out of 411) were dropped.
+* 20.5% of our Latinx/Hispanic students (140 out of 684) were dropped.
+* 23.9% of students identifying as neither were dropped.
+
+There is a likelihood that a student's race/ethnicity affects their probability of completing a Code Nation program, with Black/African American students exhibiting higher drop rates than the overall average.
+
+```{r echo=FALSE}
+raceeth_comp <- ggplot (subset(studata, AUDIT!="AUDIT"), aes(x = Black_Latinx_NEW, fill=Status)) +
+        geom_bar(position="fill") +
+        geom_hline(mapping = aes(yintercept=0.2351314), color="#0080FF", linetype="solid") +
+        scale_fill_manual(values=c("#00FFCC", "grey")) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(title="Completion/Drop Rate for Students By Race/Ethnicity",
+             x="Students' Race/Ethnicity", y="% Percent of Completion or Drop") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=2, y=0.258, label="average drop rate = 23.5%", size=3.8, color="#0080FF") +
+        annotate("text", x=1, y=1.02, label="total = 411", size=3.8, color="#FFAA7B") +
+        annotate("text", x=2, y=1.02, label="total = 684", size=3.8, color="#FFAA7B") +
+        annotate("text", x=3, y=1.02, label="total = 348", size=3.8, color="#FFAA7B")
+
+raceeth_comp
+```
+
+### By Gender
+
+At the end of the 2018-2019 school year...
+
+* 25.8% of our female students (114 out of 643) were dropped.
+* 21.5% of our male students (170 out of 791) were dropped.
+* 11.1% of students (1 out of 9) identifying as neither were dropped.
+
+There is a likelihood that a student's gender affects their probability of completing a Code Nation program, with female students exhibiting higher drop rates than the overall average.
+
+```{r echo=FALSE}
+gender_comp <- ggplot (subset(studata, AUDIT!="AUDIT"), aes(x = Gender, fill=Status)) +
+        geom_bar(position="fill") +
+        geom_hline(mapping = aes(yintercept=0.2351314), color="#0080FF", linetype="solid") +
+        scale_fill_manual(values=c("#00FFCC", "grey")) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(title="Completion/Drop Rate for Students By Gender",
+             x="Students' Gender", y="% Percent of Completion or Drop") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey")) +
+        annotate("text", x=2, y=0.258, label="average drop rate = 23.5%", size=3.8, color="#0080FF") +
+        annotate("text", x=1, y=1.02, label="total = 643", size=3.8, color="#FFAA7B") +
+        annotate("text", x=2, y=1.02, label="total = 791", size=3.8, color="#FFAA7B") +
+        annotate("text", x=3, y=1.02, label="total = 9", size=3.8, color="#FFAA7B")
+
+gender_comp
+```
+
+## Dropped Reasons Data Summaries {.tabset}
+
+From a programmatic standpoint, my interest is in the values of "Low Dosage" and "No Interest", because those are often the metrics that reflect a student's comfortability with and interest in Code Nation programming. That being said, these are the metrics that we have the most ability to affect. However, students who are dropped due to Out of Control Conflicts are also of interest, because it seems like solutions to this expand out of the scope of day-to-day programming.
+
+* 22% of the 337 total dropped students were dropped due to lack of or no interest in programming.
+* 22.9% of the 337 total dropped students were dropped due to low dosage, or they were not present for most of the instruction provided.
+* 22.6% of the 337 total dropped students were dropped due to a conflict out of their/the program's control.
+
+### Overall
+```{r echo=FALSE}
+dropreason_overall <- studata %>%
+        filter(AUDIT!="AUDIT", Status=="Dropped") %>%
+        group_by(Drop_Out_Reason_NEW) %>%
+        summarise(count = n()) %>%
+        mutate(prop=percent(count/sum(count)))
+
+dropreason_overall
+```
+
+
+### By Race/Ethnicity
+
+**No Interest Key Points**
+
+The students who were dropped due to lack of or no interest in Code Nation were...
+
+* 15% of the 114 dropped Black/African American students
+* 22.9% of the 140 dropped Latinx/Hispanic students
+* 30.1% of the 83 dropped students identifying as neither
+
+**Low Dosage Key Points**
+
+The students who were dropped due to low dosage were...
+
+* 25% of the 114 dropped Black/African American students
+* 20.7% of the 140 dropped Latinx/Hispanic students
+* 24.1% of the 83 dropped students identifying as neither
+
+**Out of Control Conflict Key Points**
+
+The students who were dropped due to conflicts out of the students' controls were...
+
+* 25% of the 114 dropped Black/African American students
+* 24.3% of the 140 dropped Latinx/Hispanic students
+* 16.9% of the 83 dropped students identifying as neither
+
+
+```{r echo=FALSE}
+studata %>%
+        filter(Status=="Dropped", AUDIT!="AUDIT") %>%
+        group_by(Black_Latinx_NEW, Drop_Out_Reason_NEW) %>%
+        summarise(count = n()) %>%
+        group_by(Black_Latinx_NEW) %>%
+        mutate(prop=percent(count/sum(count)))
+```
+
+### By Gender
+
+Because the grouping for "Neither male nor female" is so small, I will be removing it from these data key points.
+
+**No Interest Key Points**
+
+The students who were dropped due to lack of or no interest in Code Nation were...
+
+* 25% of the 166 dropped female students
+* 19.4% of the 170 dropped male students
+
+**Low Dosage Key Points**
+
+The students who were dropped due to low dosage were...
+
+* 25% of the 166 dropped female students
+* 21.2% of the 170 dropped male students
+
+**Out of Control Conflict Key Points**
+
+The students who were dropped due to conflicts out of the students' controls were...
+
+* 22% of the 166 dropped female students
+* 22.9% of the 170 dropped male students
+
+```{r echo=FALSE}
+studata %>%
+        filter(Status=="Dropped", AUDIT!="AUDIT") %>%
+        group_by(Gender, Drop_Out_Reason_NEW) %>%
+        summarise(count = n()) %>%
+        group_by(Gender) %>%
+        mutate(prop=percent(count/sum(count)))
+```
+
+## Dropped Reasons Data Visualizations {.tabset}
+
+The percentages above are reflected in the data visualizations below.
+
+### By Race/Ethnicity
+```{r echo=FALSE}
+dropreason_raceeth <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped"), aes(x=Drop_Out_Reason_NEW, group=Black_Latinx_NEW)) +
+        geom_bar(aes(y=..prop..)) +
+        facet_grid(~Black_Latinx_NEW) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(title="Drop Out Reason, Broken down by Race/Ethnicity",
+             x="Drop Out Reason", y="% Percent of Provided Drop Out Reason") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey"),
+              axis.text.x = element_text(angle=60, size=9, hjust=1),
+              strip.background = element_blank())
+
+dropreason_raceeth
+```
+
+### By Gender
+
+```{r echo=FALSE}
+dropreason_gender <- ggplot (subset(studata, AUDIT!="AUDIT" & Status=="Dropped" & Gender!="Other"), aes(x=Drop_Out_Reason_NEW, group=Gender)) +
+        geom_bar(aes(y=..prop..)) +
+        facet_grid(~Gender) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(title="Drop Out Reason, Broken down by Gender",
+             x="Drop Out Reason", y="% Percent of Provided Drop Out Reason") +
+        theme(plot.title = element_text(size=14, face="bold", color="#0080FF"),
+              axis.title.x = element_text(size = 12, color="#0080FF"), axis.title.y = element_text(size = 12, color="#0080FF"),
+              panel.background = element_rect(fill="white"),
+              panel.grid.major = element_line(size=0.25, linetype="solid", color="light grey"),
+              panel.grid.minor = element_line(size=0.15, linetype="solid", color="light grey"),
+              axis.text.x = element_text(angle=60, size=9, hjust=1),
+              strip.background = element_blank())
+
+dropreason_gender
+```
+
+## Sample Data Inference
+
+The sample data analysis I will be enacting will answer the question: **Does the data provide strong evidence that there is a statistically significant difference between students of different races/ethnicities (particularly Black or African American, Latinx or Hispanic, and those identifying as neither) and their propensity to either complete or drop a Code Nation program in the 2018-2019 school year?**
+
+### Hypothesis
+
+The **null hypothesis, H0** is that there is no difference between students of different races/ethnicities (particularly Black or African American, Latinx or Hispanic, and those identifying as neither) and their propensity to either complete or drop a Code Nation program in the 2018-2019 school year.
+
+The **alternative hypothesis, HA** is that there IS a difference between students of different races/ethnicities (particularly Black or African American, Latinx or Hispanic, and those identifying as neither) and their propensity to either complete or drop a Code Nation program in the 2018-2019 school year.
+
+That is, a person's race/ethnicity explains their propensity to either complete or drop a Code Nation program, or the two variables are not independent.
+
+### Data Prep
+
+I will be using a **chi-square test for independence**, because the test is used to determine whether or not there is statistically significant associations between two categorical variables. Here, my two variables are a student's race/ethnicity and their complete/drop status.
+
+Before I do that, I need to create a testing set that fulfills two conditions:
+
+1. The variables need to be independent, meaning that I need to sample less than 10% of the full data set.
+2. The expected values for all intersections must be greater than five, meaning that 75% and 25% of all race/ethnicity totals are greater than 5.
+
+```{r echo=FALSE, message=FALSE}
+library(dataPreparation)
+library(statsr)
+
+set.seed(88)
+sample_index <- sample(1:nrow(studata), 0.1 * nrow(studata))
+sample_studata <- studata[sample_index,]
+```
+
+### Data Summaries {.tabset}
+
+#### Overall
+```{r echo=FALSE}
+sample_complavg <- sample_studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Status) %>%
+        summarise(count = n()) %>%
+        mutate(prop=percent(count/sum(count)))
+
+sample_complavg
+```
+
+#### By Race/Ethnicity
+```{r echo=FALSE}
+sample_studata %>%
+        filter(AUDIT!="AUDIT") %>%
+        group_by(Black_Latinx_NEW, Status) %>%
+        summarise(count = n()) %>%
+        group_by(Black_Latinx_NEW) %>%
+        mutate(prop=percent(count/sum(count)))
+```
+
+### Chi-Square Test
+
+If the p-value is less than 0.05 (the significance level), then there is statistically significant evidence to suggest that the two variables of political views and stance on government spending on environment are not independent. If it is greater than 0.05, we will fail to reject the null hypothesis.
+
+```{r echo=FALSE}
+chisq.test(table(sample_studata$Black_Latinx_NEW, sample_studata$Status))
+```
+
+### Results Interpretation
+
+The chi-squared value comes out to be 2.3361, and the p-value of 0.311 is greater than our chosen significance level of 0.05. **Based on these results, there is not enough statistical evidence to reject the null hypothesis that a student's race/ethnicity is associated with their propensity to complete or drop a Code Nation program in the 2018-2019 school year. That is, the variables are likely independent.**
